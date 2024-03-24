@@ -6,8 +6,12 @@
     <body class="body">
         <a href=".">RELOAD</a><br/>
         <a href="/tg/chat/{{chat_id}}/{{page+1}}">GO UP</a><br/>
-        {% set vars = namespace(current_sender=None) %}
+        {% set vars = namespace(current_sender=None, datestamp=None) %}
         {% for msg in messages %}
+            {% if vars.datestamp != msg["datestamp"] %}
+                {% set vars.current_sender = None %}
+                <span class="datestamp">{{ msg["datestamp"] }}</span><br/>
+            {% endif %}
             {% if vars.current_sender != msg["sender"] %}
                 <span class="sender_name">{{ msg["sender"]["name"] }}</span><br/>
             {% endif %}
@@ -31,6 +35,7 @@
             {% endif %}
             <span class="timestamp">                    {{ msg["timestamp"] }}</span><br/>
             {% set vars.current_sender = msg["sender"] %}
+            {% set vars.datestamp = msg["datestamp"] %}
         {% endfor %}
         {%if page!=0 %}<a href="/tg/chat/{{chat_id}}/{%if page!=1%}{{page-1}}{%endif%}">GO DOWN</a><br/>{%endif%}
         {%if page==0 %}<a href=".">RELOAD</a><br/>{%endif%}

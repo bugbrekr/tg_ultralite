@@ -237,6 +237,7 @@ def chat_page(chat_id, page):
             msg["caption"] = _msg.caption
         msg["forwarded"] = get_forwarded_msg_information(_msg)
         msg["timestamp"] = _msg.date.strftime("%H:%M")
+        msg["datestamp"] = _msg.date.strftime("%B %-d, %Y")
         msg["sender"] = {"name": clean_string(get_chat_name(get_chat_from_message(_msg)))}
         messages.append(msg)
     return flask.render_template("chat.html", chat_name=chat_name, chat_id=chat_id, page=page, messages=messages)
