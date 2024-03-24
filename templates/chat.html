@@ -15,6 +15,13 @@
             {% if vars.current_sender != msg["sender"] %}
                 <span class="sender_name">{{ msg["sender"]["name"] }}</span><br/>
             {% endif %}
+            {% if msg["forwarded"] != None %}
+                {% if msg["forwarded"][1] != None %}
+                <span class="forwarded_name_label">Forwarded from <a href="/tg/chat/{{msg["forwarded"][1]}}/">{{ msg["forwarded"][0] }}</a></span><br/>
+                {% else %}
+                <span class="forwarded_name_label">Forwarded from {{ msg["forwarded"][0] }}</span><br/>
+                {% endif %}
+            {% endif %}
             {% if msg["type"] == "text" %}
                 <span class="text_message">{{ msg["text"]|safe }}</span><br/>
             {% elif msg["type"] == "media" %}

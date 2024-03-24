@@ -31,3 +31,8 @@ a {
     font-weight: bold;
     font-size: 30px;
 }
+
+.forwarded_name_label {
+    font-weight: bold;
+    font-size: 15px;
+}
