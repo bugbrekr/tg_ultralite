@@ -77,6 +77,26 @@ def get_chat_name(c):
     else:
         return c.title
 
+def get_chat_from_message(m):
+    if m.from_user != None:
+        return m.from_user
+    elif m.sender_chat != None:
+        return m.sender_chat
+
+def get_forwarded_msg_information(m):
+    if m.forward_from != None:
+        name = get_chat_name(m.forward_from)
+        chat_id = m.forward_from.id
+    elif m.forward_sender_name != None:
+        name = m.forward_sender_name
+        chat_id = None
+    elif m.forward_from_chat != None:
+        name = get_chat_name(get_chat_from_message(m.forward_from_chat))
+        chat_id = m.forward_from_chat.id
+    else:
+        return None
+    return name, chat_id
+
 @app.route("/tg/", defaults={'page': 0})
 @app.route("/tg/<int:page>")
 def chat_list(page):
@@ -134,11 +154,13 @@ def chat_page(chat_id, page):
     messages = []
     for _msg in history:
         msg = {}
+        print(_msg)
         if _msg.text != None:
             msg["type"] = "text"
             msg["text"] = html.escape(_msg.text).replace("\n", "<br>")
+        msg["forwarded"] = get_forwarded_msg_information(_msg)
         msg["timestamp"] = _msg.date.strftime("%H:%M")
-        msg["sender"] = {"name": clean_string((_msg.from_user.first_name if _msg.from_user!=None else get_chat_name(_msg.sender_chat)))}
+        msg["sender"] = {"name": clean_string(get_chat_name(get_chat_from_message(_msg)))}
         messages.append(msg)
     return flask.render_template("chat.html", chat_name="Saved Messages", chat_id=chat_id, page=page, messages=messages)
 
