@@ -13,6 +13,19 @@
             {% endif %}
             {% if msg["type"] == "text" %}
                 <span class="text_message">{{ msg["text"]|safe }}</span><br/>
+            {% elif msg["type"] == "media" %}
+                {% if msg["media_type"] in ["photo", "video"] %}
+                    {% if msg["has_thumbs"] == True %}
+                    <a href="/tg/media_download/{{msg["media_file_unique_id"]}}"><img src="/tg/media_preview/{{msg["media_file_unique_id"]}}" alt="Preview"></a><br/>
+                    {% else %}
+                    <a href="/tg/media_download/{{msg["media_file_unique_id"]}}"><span class="text_message" style="font-weight: bold;">{{msg["media_type"].upper()}}: {{msg["media_file_name"]}}</span></a><br/>
+                    {% endif %}
+                {% else %}
+                <a href="/tg/media_download/{{msg["media_file_unique_id"]}}"><span class="text_message" style="font-weight: bold;">{{msg["media_type"].upper()}}{% if msg.get("media_file_name")!=None %}: {{msg["media_file_name"]}}{% endif %}</span></a><br/>
+                {% endif %}
+                {% if msg["caption"] != None %}
+                <span class="text_message">{{msg["caption"]}}</span><br/>
+                {% endif %}
             {% else %}
             <span class="text_message" style="font-weight: bold;">|NON-TEXT|</span><br/>
             {% endif %}
@@ -20,6 +33,7 @@
             {% set vars.current_sender = msg["sender"] %}
         {% endfor %}
         {%if page!=0 %}<a href="/tg/chat/{{chat_id}}/{%if page!=1%}{{page-1}}{%endif%}">GO DOWN</a><br/>{%endif%}
+        {%if page==0 %}<a href=".">RELOAD</a><br/>{%endif%}
         <div class="message_box">
             <form action="/tg/sendTextMessage">
                 <input type="hidden" name="chat_id" value="{{chat_id}}">

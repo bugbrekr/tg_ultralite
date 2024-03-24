@@ -61,6 +61,10 @@ class TelegramSession:
         return msg_id
     def read_chat_history(self, chat_id, max_id=0):
         return self.tgs.read_chat_history(chat_id=chat_id, max_id=max_id)
+    def get_chat(self, chat_id):
+        return self.tgs.get_chat(chat_id=chat_id)
+    def download_media(self, message, file_name=None):
+        return self.tgs.download_media(message=message, file_name=file_name, in_memory=False, block=True)
 
 class TelegramServer:
     def __init__(self, socket_path=None):
@@ -206,7 +210,7 @@ class TelegramClient:
         if status == True:
             return data
         elif data['type'] == "RuntimeError":
-            err = "\n------------------TELEGRAM SERVER SAYS------------------\n"+data["traceback"]
+            err = "\n------------------START TELEGRAM SERVER SAYS------------------\n"+data["traceback"]+"-------------------STOP TELEGRAM SERVER SAYS------------------"
             raise RuntimeError(err)
         elif data['type'] == "SessionNotInitialized":
             raise self.SessionNotInitializedError(f"Session not initialized for {self.session_id}")

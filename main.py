@@ -1,4 +1,5 @@
 import flask
+import os
 import database
 import time
 import hashlib
@@ -22,6 +23,11 @@ tokendb = database.JSONDatabase("db/tokendb.json")
 accountsdb = database.JSONDatabase("db/accountsdb.json")
 securitydb = database.JSONDatabase("db/securitydb.json")
 tg_sessiondb = database.MessagePackDatabase("db/tg_sessiondb.msgpack")
+mediadb = database.MessagePackDatabase("db/mediadb.msgpack")
+if not os.path.isdir("db"):
+    os.mkdir("db")
+if not os.path.isdir("cache"):
+    os.mkdir("cache")
 
 tg_clients = {}
 with open("db/tg_socket_path") as f:
@@ -97,6 +103,63 @@ def get_forwarded_msg_information(m):
         return None
     return name, chat_id
 
+def get_friendly_name_for_media(media):
+    return media.value.replace("_", " ").title()
+
+def mimetype_to_ext(mimetype):
+    match mimetype:
+        case "image/jpeg":
+            return ".jpg"
+        case "image/png":
+            return ".png"
+        case "image/gif":
+            return ".gif"
+        case "audio/mpeg":
+            return ".mp3"
+
+def download_media(tg, file_id):
+    while True:
+        file_path = secrets.token_hex(32)
+        if not os.path.isfile(f"cache/{file_path}"):
+            break
+    tg.call("download_media", message=file_id, file_name=f"cache/{file_path}")
+    return file_path
+
+def register_media(file, media_type):
+    mime_type = None
+    if hasattr(file, "mime_type"):
+        mime_type = file.mime_type
+    else:
+        if media_type == "photo":
+            mime_type = "image/jpeg"
+        elif media_type == "video":
+            mime_type = "video/mp4"
+    has_thumbs = bool(hasattr(file, "thumbs") and file.thumbs and file.thumbs[0].file_id != file.file_id)
+    mediadb[file.file_unique_id] = {"mime_type": mime_type, "file_name": file.file_name if hasattr(file, "file_name") else None, "has_thumbs": has_thumbs, "file_id": file.file_id}
+    if has_thumbs:
+        thumbdata = {"file_id": file.thumbs[0].file_id, "width": file.thumbs[0].width, "height": file.thumbs[0].height}
+        mdata = mediadb[file.file_unique_id]
+        mdata["thumb"] = thumbdata
+        mediadb[file.file_unique_id] = mdata
+
+def download_thumb(tg, file, media_type):
+    mdata = mediadb.get(file.file_unique_id)
+    if mdata != None:
+        if mdata["has_thumbs"]:
+            if mdata["thumb"].get("file_path"):
+                return mdata["thumb"]["file_path"]
+        else:
+            return None
+    else:
+        register_media(file, media_type)
+    mdata = mediadb.get(file.file_unique_id)
+    if not mdata["has_thumbs"]:
+        return None
+    file_path = download_media(tg, file.thumbs[0].file_id)
+    mdata["thumb"]["file_path"] = file_path
+    mediadb[file.file_unique_id] = mdata
+    return file_path
+
 @app.route("/tg/", defaults={'page': 0})
 @app.route("/tg/<int:page>")
 def chat_list(page):
@@ -128,12 +191,17 @@ def chat_list(page):
             )
         elif c["top_message"].media != None:
             chat["last_message"] = (
-                clean_string(c["top_message"].media.value.capitalize()+(", "+c["top_message"].caption[:25]+("..." if len(c["top_message"].caption)>25 else "") if c["top_message"].caption!=None else "")).replace("\n", " "),
+                clean_string(get_friendly_name_for_media(c["top_message"].media)+(", "+c["top_message"].caption[:25]+("..." if len(c["top_message"].caption)>25 else "") if c["top_message"].caption!=None else "")).replace("\n", " "),
                 clean_string((c["top_message"].from_user.first_name if c["top_message"].from_user!=None else get_chat_name(c["top_message"].sender_chat)))
+            )
+        elif c["top_message"].service != None:
+            chat["last_message"] = (
+                "<SERVICE MESSAGE>",
+                None
             )
         else:
             chat["last_message"] = (
-                "<SERVICE MESSAGE>",
+                "<NON-MESSAGE>",
                 None
             )
         chat["last_message_time"] = c["top_message"].date.strftime("%H:%M")
@@ -150,22 +218,56 @@ def chat_page(chat_id, page):
         return flask.redirect("/tg/")
     token_data = tokendb[flask.request.cookies['access_token']]
     tg = get_tg_client(token_data['username'])
+    chat_name = get_chat_name(tg.call("get_chat", chat_id=chat_id))
     history = tg.call("get_chat_history", chat_id=chat_id, limit=MESSAGES_PER_PAGE, offset=page*MESSAGES_PER_PAGE)[::-1]
     messages = []
     for _msg in history:
         msg = {}
-        print(_msg)
         if _msg.text != None:
             msg["type"] = "text"
             msg["text"] = html.escape(_msg.text).replace("\n", "<br>")
+        if _msg.media != None:
+            msg["type"] = "media"
+            msg["media_type"] = _msg.media.value
+            media_data = getattr(_msg, _msg.media.value)
+            download_thumb(tg, media_data, _msg.media.value)
+            msg["has_thumbs"] = mediadb[media_data.file_unique_id]["has_thumbs"]
+            msg["media_file_unique_id"] = media_data.file_unique_id
+            msg["media_file_name"] = mediadb[media_data.file_unique_id]["file_name"]
+            msg["caption"] = _msg.caption
         msg["forwarded"] = get_forwarded_msg_information(_msg)
         msg["timestamp"] = _msg.date.strftime("%H:%M")
         msg["sender"] = {"name": clean_string(get_chat_name(get_chat_from_message(_msg)))}
         messages.append(msg)
-    return flask.render_template("chat.html", chat_name="Saved Messages", chat_id=chat_id, page=page, messages=messages)
+    return flask.render_template("chat.html", chat_name=chat_name, chat_id=chat_id, page=page, messages=messages)
+
+@app.route("/tg/media_preview/<file_unique_id>")
+def media_preview(file_unique_id):
+    mdata = mediadb.get(file_unique_id)
+    if mdata == None or not mdata["has_thumbs"]:
+        return "NOT FOUND", 404
+    file_path = mdata["thumb"]["file_path"]
+    return flask.send_file(f"cache/{file_path}", mimetype="image/jpeg", download_name=mdata["file_name"])
+
+@app.route("/tg/media_download/<file_unique_id>")
+def media_download(file_unique_id):
+    mdata = mediadb.get(file_unique_id)
+    if mdata.get("file_path") == None:
+        token_data = tokendb[flask.request.cookies['access_token']]
+        tg = get_tg_client(token_data['username'])
+        mdata["file_path"] = download_media(tg, mdata["file_id"])
+        mediadb[file_unique_id] = mdata
+    file_path = mdata["file_path"]
+    mime_type = mdata["mime_type"]
+    file_name = mdata["file_name"]
+    if mime_type == "image/jpeg":
+        file_name = (file_name if file_name else secrets.token_hex(8))+".jpg"
+    elif mime_type == "audio/ogg":
+        file_name = (file_name if file_name else secrets.token_hex(8))+".ogg"
+    return flask.send_file(f"cache/{file_path}", mimetype=mime_type, download_name=file_name, as_attachment=True)
 
 @app.route("/tg/sendTextMessage")
-def sendTextMessage():
+def send_text_message():
     msg = flask.request.args["message"].strip()
     chat_id = flask.request.args["chat_id"]
     if msg == "":
