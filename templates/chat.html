@@ -1,0 +1,31 @@
+<html>
+    <head>
+        <title>{{chat_name}} | TG UltraLite</title>
+        <link rel="stylesheet" href="/tg/chat.css">
+    </head>
+    <body class="body">
+        <a href=".">RELOAD</a><br/>
+        <a href="/tg/chat/{{chat_id}}/{{page+1}}">GO UP</a><br/>
+        {% set vars = namespace(current_sender=None) %}
+        {% for msg in messages %}
+            {% if vars.current_sender != msg["sender"] %}
+                <span class="sender_name">{{ msg["sender"]["name"] }}</span><br/>
+            {% endif %}
+            {% if msg["type"] == "text" %}
+                <span class="text_message">{{ msg["text"]|safe }}</span><br/>
+            {% else %}
+            <span class="text_message" style="font-weight: bold;">|NON-TEXT|</span><br/>
+            {% endif %}
+            <span class="timestamp">                    {{ msg["timestamp"] }}</span><br/>
+            {% set vars.current_sender = msg["sender"] %}
+        {% endfor %}
+        {%if page!=0 %}<a href="/tg/chat/{{chat_id}}/{%if page!=1%}{{page-1}}{%endif%}">GO DOWN</a><br/>{%endif%}
+        <div class="message_box">
+            <form action="/tg/sendTextMessage">
+                <input type="hidden" name="chat_id" value="{{chat_id}}">
+                <input style="padding: 0px 36px 0px 0px;" type="text" name="message">
+                <button style="font-size: 15px; padding: 10px 0px 0px 0px; margin: 0px 0px 0px 0px;" type="submit">Send</button>
+            </form>
+        </div>
+    </body>
+</html>

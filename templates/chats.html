@@ -1,0 +1,18 @@
+<html>
+    <head>
+        <title>Chats | TG UltraLite</title>
+        <link rel="stylesheet" href="/tg/chats.css">
+    </head>
+    <body class="body">
+        <a href=".">RELOAD</a><br />
+        {%if total_unread_counter > 0%}<label>{{total_unread_counter}} message{%if total_unread_counter != 1%}s{%endif%} unread in {{unread_chats}} chat{%if unread_chats != 1%}s{%endif%}</label>{%endif%}<br />
+        {%if current_page >0 %}<a href="/tg/{{"" if current_page-1==0 else current_page-1}}">PREV PAGE - {{current_page}}</a><br />{%endif%}
+        {% for chat in chats%}
+            <div class="chat_div">
+                <a class="chat_name_a" href="/tg/chat/{{ chat['id'] }}/"><label style="font-size: 20px;">{{ chat["name"] }}{%if chat["unread_counter"] > 0%} ({{chat["unread_counter"]}}){%endif%}</label></a><br />
+                <label>{% if chat["last_message"][1] != None %}{{chat["last_message"][1]}}: {% endif %}{{ chat["last_message"][0] }}</label>
+            </div><br />
+        {% endfor %}
+        {%if not is_last_page %}<a href="/tg/{{current_page+1}}">NEXT PAGE - {{current_page+2}}</a>{%endif%}
+    </body>
+</html>

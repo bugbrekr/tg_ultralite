@@ -1,0 +1,28 @@
+.body {
+    background-color: #223D3D;
+    color: white;
+}
+
+a {
+    color: white;
+}
+
+.message_box {
+    margin: 0px;
+}
+
+.sender_name {
+    font-weight: bold;
+    font-size: 20px;
+}
+
+.text_message {
+    font-size: 15px;
+}
+
+.timestamp {
+    font-size: 10px;
+    /* padding-top: 40px; */
+    /* margin-top: 40px; */
+
+}

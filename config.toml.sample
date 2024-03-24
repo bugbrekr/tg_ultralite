@@ -1,0 +1,5 @@
+# Rename to config.toml
+
+[telegram]
+api_id = XXXXXXX
+api_hash = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
