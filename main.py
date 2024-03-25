@@ -14,7 +14,7 @@ app = flask.Flask(__name__, static_url_path='/tg/', static_folder='static')
 
 SYSTEM_LOCK_THRESHOLD = 5
 LOGIN_VALIDITY_DURATION = 3600
-PUBLIC_ENDPOINTS = ["/tg/login", "/tg/login/verify", "/tg/system_locked"]
+PUBLIC_ENDPOINTS = ["/tg/login", "/tg/login/verify", "/tg/system_locked", "/tg/media_download/"]
 
 DIALOGS_PER_PAGE = 10
 MESSAGES_PER_PAGE = 10
@@ -134,6 +134,8 @@ def register_media(file, media_type):
             mime_type = "image/jpeg"
         elif media_type == "video":
             mime_type = "video/mp4"
+        elif media_type == "video_note":
+            mime_type = "video/mp4"
     has_thumbs = bool(hasattr(file, "thumbs") and file.thumbs and file.thumbs[0].file_id != file.file_id)
     mediadb[file.file_unique_id] = {"mime_type": mime_type, "file_name": file.file_name if hasattr(file, "file_name") else None, "has_thumbs": has_thumbs, "file_id": file.file_id}
     if has_thumbs:
@@ -226,14 +228,18 @@ def chat_page(chat_id, page):
         if _msg.text != None:
             msg["type"] = "text"
             msg["text"] = html.escape(_msg.text).replace("\n", "<br>")
-        if _msg.media != None:
+        elif _msg.media != None:
             msg["type"] = "media"
             msg["media_type"] = _msg.media.value
-            media_data = getattr(_msg, _msg.media.value)
-            download_thumb(tg, media_data, _msg.media.value)
-            msg["has_thumbs"] = mediadb[media_data.file_unique_id]["has_thumbs"]
-            msg["media_file_unique_id"] = media_data.file_unique_id
-            msg["media_file_name"] = mediadb[media_data.file_unique_id]["file_name"]
+            if _msg.media.value in ["audio", "document", "photo", "video", "animation", "voice", "video_note"]:
+                media_data = getattr(_msg, _msg.media.value)
+                download_thumb(tg, media_data, _msg.media.value)
+                msg["has_thumbs"] = mediadb[media_data.file_unique_id]["has_thumbs"]
+                msg["media_file_unique_id"] = media_data.file_unique_id
+                msg["media_file_name"] = mediadb[media_data.file_unique_id]["file_name"]
+            else:
+                print(_msg)
+                msg["has_thumbs"] = False
             msg["caption"] = _msg.caption
         msg["forwarded"] = get_forwarded_msg_information(_msg)
         msg["timestamp"] = _msg.date.strftime("%H:%M")
@@ -262,9 +268,11 @@ def media_download(file_unique_id):
     mime_type = mdata["mime_type"]
     file_name = mdata["file_name"]
     if mime_type == "image/jpeg":
-        file_name = (file_name if file_name else secrets.token_hex(8))+".jpg"
+        file_name = file_name if file_name else secrets.token_hex(8)+".jpg"
     elif mime_type == "audio/ogg":
-        file_name = (file_name if file_name else secrets.token_hex(8))+".ogg"
+        file_name = file_name if file_name else secrets.token_hex(8)+".ogg"
+    elif mime_type == "video/mp4":
+        file_name = file_name if file_name else secrets.token_hex(8)+".mp4"
     return flask.send_file(f"cache/{file_path}", mimetype=mime_type, download_name=file_name, as_attachment=True)
 
 @app.route("/tg/sendTextMessage")
@@ -346,8 +354,9 @@ def system_locked_message():
 
 @app.before_request
 def before_request():
-    if flask.request.path in PUBLIC_ENDPOINTS:
-        return
+    for path in PUBLIC_ENDPOINTS:
+        if flask.request.path.startswith(path):
+            return
     if not verify_token(flask.request.cookies.get('access_token')):
         return flask.redirect("/tg/login")
 
