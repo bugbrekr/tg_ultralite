@@ -14,7 +14,9 @@ API_ID = config["telegram"]["API_ID"]
 API_HASH = config["telegram"]["API_HASH"]
 
 class TelegramSession:
-    def __init__(self, session_data, session_id, api_id=API_ID, api_hash=API_HASH):
+    def __init__(self, session_data, session_id=None, api_id=API_ID, api_hash=API_HASH):
+        if session_id == None:
+            session_id = secrets.token_hex(16)
         self.tgs = pyrogram.Client(
             session_id,
             session_string=session_data,
