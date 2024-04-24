@@ -14,7 +14,7 @@ API_ID = config["telegram"]["API_ID"]
 API_HASH = config["telegram"]["API_HASH"]
 
 class TelegramSession:
-    def __init__(self, session_id, session_data, api_id=API_ID, api_hash=API_HASH):
+    def __init__(self, session_data, session_id, api_id=API_ID, api_hash=API_HASH):
         self.tgs = pyrogram.Client(
             session_id,
             session_string=session_data,
@@ -91,7 +91,11 @@ class TelegramServer:
         return self._recvall(sock, msglen)
     def _send_msg(self, sock, data):
         data = struct.pack('>I', len(data)) + data
-        sock.sendall(data)
+        try:
+            sock.sendall(data)
+            return data
+        except:
+            return None
     def _send(self, sock, data):
         packed_data = pickle.dumps(data)
         self._send_msg(sock, packed_data)
@@ -118,35 +122,40 @@ class TelegramServer:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         while True:
-            sock, _, = self.s_sock.accept()
-            while True:
-                data = self._recv(sock)
-                if not data:
+            try:
+                sock, _, = self.s_sock.accept()
+                while True:
+                    data = self._recv(sock)
+                    if not data:
+                        sock.close()
+                        break
+                    if data['type'] == "call_method":
+                        resp_status, resp_data = self.request_handler(data['session_id'], data['method'], tuple(data['args']), data['kwargs'])
+                        self._send(sock, {"status": resp_status, "data": resp_data})
+                    elif data['type'] == "raw_call_method":
+                        resp_status, resp_data = self.request_handler(data['session_id'], data['method'], tuple(data['args']), data['kwargs'], raw=True)
+                        self._send(sock, {"status": resp_status, "data": resp_data})
+                    elif data['type'] == "init_session":
+                        session_id, session_data = data["session_id"], data["session_data"]
+                        self.sessions[session_id] = TelegramSession(session_data, session_id)
+                        self._send(sock, {"status": True, "data": None})
+                    elif data['type'] == "get_session_data":
+                        if session_id not in self.sessions:
+                            self._send(sock, {"status": False, "data": {"type": "SessionNotInitialized"}})
+                        session_data = self.sessions[session_id]._get_session_data()
+                        self._send(sock, {"status": True, "data": session_data})
+                    elif data['type'] == "close_session":
+                        if session_id not in self.sessions:
+                            self._send(sock, {"status": False, "data": {"type": "SessionNotInitialized"}})
+                        session_data = self.sessions[session_id].close()
+                        self.sessions.pop(session_data)
+                        self._send(sock, {"status": True, "data": session_data})
                     sock.close()
                     break
-                if data['type'] == "call_method":
-                    resp_status, resp_data = self.request_handler(data['session_id'], data['method'], tuple(data['args']), data['kwargs'])
-                    self._send(sock, {"status": resp_status, "data": resp_data})
-                elif data['type'] == "raw_call_method":
-                    resp_status, resp_data = self.request_handler(data['session_id'], data['method'], tuple(data['args']), data['kwargs'], raw=True)
-                    self._send(sock, {"status": resp_status, "data": resp_data})
-                elif data['type'] == "init_session":
-                    session_id, session_data = data["session_id"], data["session_data"]
-                    self.sessions[session_id] = TelegramSession(session_id, session_data)
-                    self._send(sock, {"status": True, "data": None})
-                elif data['type'] == "get_session_data":
-                    if session_id not in self.sessions:
-                        self._send(sock, {"status": False, "data": {"type": "SessionNotInitialized"}})
-                    session_data = self.sessions[session_id]._get_session_data()
-                    self._send(sock, {"status": True, "data": session_data})
-                elif data['type'] == "close_session":
-                    if session_id not in self.sessions:
-                        self._send(sock, {"status": False, "data": {"type": "SessionNotInitialized"}})
-                    session_data = self.sessions[session_id].close()
-                    self.sessions.pop(session_data)
-                    self._send(sock, {"status": True, "data": session_data})
-                sock.close()
-                break
+            except:
+                print("------------------START CRITICAL RUNTIME ERROR------------------")
+                traceback.print_exc(chain=False)
+                print("-------------------END CRITICAL RUNTIME ERROR------------------")
 
 class TelegramClient:
     class RuntimeError(Exception):
@@ -210,7 +219,7 @@ class TelegramClient:
         if status == True:
             return data
         elif data['type'] == "RuntimeError":
-            err = "\n------------------START TELEGRAM SERVER SAYS------------------\n"+data["traceback"]+"-------------------STOP TELEGRAM SERVER SAYS------------------"
+            err = "\n------------------START TELEGRAM SERVER SAYS------------------\n"+data["traceback"]+"--------------------END TELEGRAM SERVER SAYS------------------"
             raise RuntimeError(err)
         elif data['type'] == "SessionNotInitialized":
             raise self.SessionNotInitializedError(f"Session not initialized for {self.session_id}")

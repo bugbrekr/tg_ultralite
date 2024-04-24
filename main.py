@@ -238,7 +238,6 @@ def chat_page(chat_id, page):
                 msg["media_file_unique_id"] = media_data.file_unique_id
                 msg["media_file_name"] = mediadb[media_data.file_unique_id]["file_name"]
             else:
-                print(_msg)
                 msg["has_thumbs"] = False
             msg["caption"] = _msg.caption
         msg["forwarded"] = get_forwarded_msg_information(_msg)
